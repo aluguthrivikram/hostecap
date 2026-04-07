@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Dashboard - KSRMCE</title>
+<style>
+/* --- PRESERVED STYLES --- */
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif;}
+body{display:flex;height:100vh;background:linear-gradient(135deg,#dfe9f3,#ffffff);overflow:hidden;}
+body::before,body::after{content:"";position:absolute;width:450px;height:450px;filter:blur(120px);opacity:.5;z-index:0;}
+body::before{background:#7aa8ff;top:-120px;left:-120px;}
+body::after{background:#7fffd4;bottom:-120px;right:-120px;}
+.sidebar{width:240px;backdrop-filter:blur(50px);background:rgba(255,255,255,0.15);border-right:1px solid rgba(255,255,255,0.25);padding:20px;z-index:2;height:100vh;overflow-y:auto;}
+.menu div{padding:12px;margin:8px 0;border-radius:14px;cursor:pointer;background:rgba(255,255,255,0.15);transition:.3s;}
+.menu div:hover{background:rgba(255,255,255,0.35);transform:translateX(6px);}
+.logout{margin-top:20px;padding:12px;text-align:center;background:#ff4d4d;color:white;border-radius:12px;cursor:pointer;}
+.main{flex:1;padding:25px;overflow-y:auto;height:100vh;z-index:2;}
+.card{backdrop-filter:blur(50px);background:rgba(255,255,255,0.2);border-radius:25px;padding:25px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.3);}
+table{width:100%; border-collapse: collapse; margin-top:15px;}
+th{text-align:left; padding:12px; border-bottom:2px solid rgba(0,0,0,0.1);}
+td{padding:10px; border-bottom:1px solid rgba(0,0,0,0.05);}
+.hidden{display:none;}
+input, select{padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.4); width:100%; margin-bottom:10px;}
+button{padding:12px 20px; border-radius:12px; border:none; background:#7aa8ff; color:white; cursor:pointer; font-weight:600;}
+
+/* --- NEW UPLOAD BOX --- */
+.upload-area {
+  border: 2px dashed #7aa8ff;
+  border-radius: 20px;
+  padding: 30px;
+  text-align: center;
+  background: rgba(122, 168, 255, 0.05);
+  cursor: pointer;
+  transition: 0.3s;
+}
+.upload-area:hover { background: rgba(122, 168, 255, 0.15); }
+.file-list { margin-top: 15px; }
+.file-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 5px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2 style="margin-bottom:20px;">Staff Panel</h2>
+    <div class="menu">
+        <div onclick="show('home')">🏠 Home</div>
+        <div onclick="show('classroom')">📚 My Classrooms</div>
+        <div onclick="show('attendance-sec')">📝 Attendance</div>
+        <div onclick="show('profiles')">📂 Official Profiles</div>
+    </div>
+    <div class="logout" onclick="logout()">Logout</div>
+</div>
+
+<div class="main">
+    <div id="home" class="section">
+        <div class="card">
+            <h2>Welcome, Prof. Thrivikram</h2>
+            <p>Department: CSE | KSRMCE</p>
+            <p>Designation: Senior Coordinator</p>
+        </div>
+    </div>
+
+    <div id="classroom" class="section hidden">
+        <div class="card">
+            <h2>Classroom Management</h2>
+            <select id="classSelector" onchange="loadClassFiles()">
+                <option value="CSE-A-3rdYear">CSE-A (3rd Year) - AI & ML</option>
+                <option value="CSE-B-2ndYear">CSE-B (2nd Year) - Web Tech</option>
+            </select>
+            
+            <div class="upload-area" id="dropZone">
+                <p>Drag & Drop Study Material or Click to Upload</p>
+                <input type="file" id="fileInput" hidden>
+            </div>
+            <div id="fileStatus" style="margin-top:10px; color: #28a745;"></div>
+            
+            <div class="file-list" id="classFileList">
+                </div>
+        </div>
+    </div>
+
+    <div id="attendance-sec" class="section hidden">
+        <div class="card">
+            <h2>Daily Attendance</h2>
+            <select id="attClassSelector">
+                <option value="CSE-A-3rdYear">CSE-A (3rd Year)</option>
+            </select>
+            <table>
+                <thead><tr><th>Roll No</th><th>Action</th></tr></thead>
+                <tbody id="attList"></tbody>
+            </table>
+            <button onclick="submitAttendance()" style="margin-top:20px; width:100%; background:#28a745;">Submit to Cloud</button>
+        </div>
+    </div>
+
+    <div id="profiles" class="section hidden">
+        <div class="card">
+            <h2>Official Letter Uploads</h2>
+            <p>Select destination for official correspondence:</p>
+            <select id="targetProfile">
+                <option value="HOD">HOD Profile</option>
+                <option value="Management">Management Profile</option>
+                <option value="StaffAdmin">Staff Admin Records</option>
+            </select>
+            <div class="upload-area" onclick="document.getElementById('profileFile').click()">
+                <p>Click to upload Official Letters/Docs</p>
+                <input type="file" id="profileFile" hidden onchange="uploadOfficialDoc()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, increment, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-storage.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCHS6YQr6jx3oQwSaoi-CTJBPk6MsCwOvY",
+    authDomain: "clg-web-918e8.firebaseapp.com",
+    projectId: "clg-web-918e8",
+    storageBucket: "clg-web-918e8.firebasestorage.app",
+    messagingSenderId: "284984143990",
+    appId: "1:284984143990:web:010826a68926fc8a21af57"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Data Sample
+const students = [
+    {roll: "22U21A0501", name: "Thrivikram"},
+    {roll: "22U21A0502", name: "Student B"},
+    {roll: "22U21A0503", name: "Student C"}
+];
+
+window.show = (id) => {
+    document.querySelectorAll('.section').forEach(s=>s.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    if(id === 'attendance-sec') loadAttendanceUI();
+    if(id === 'classroom') loadClassFiles();
+};
+
+// --- ATTENDANCE SYSTEM ---
+function loadAttendanceUI() {
+    const list = document.getElementById("attList");
+    list.innerHTML = students.map(s => `
+        <tr><td>${s.roll}</td><td>
+            <input type="radio" name="at_${s.roll}" value="P" checked> P
+            <input type="radio" name="at_${s.roll}" value="A"> A
+        </td></tr>
+    `).join('');
+}
+
+window.submitAttendance = async () => {
+    for(let s of students) {
+        const status = document.querySelector(`input[name="at_${s.roll}"]:checked`).value;
+        const userRef = doc(db, "attendance", s.roll);
+        
+        // Atomic increment in Firebase
+        await setDoc(userRef, {
+            total: increment(1),
+            present: status === "P" ? increment(1) : increment(0)
+        }, { merge: true });
+    }
+    alert("Attendance Synced with Firebase!");
+};
+
+// --- CLASSROOM UPLOAD SYSTEM ---
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.onclick = () => fileInput.click();
+
+fileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    const className = document.getElementById('classSelector').value;
+    if(!file) return;
+
+    const storageRef = ref(storage, `classroom/${className}/${file.name}`);
+    document.getElementById('fileStatus').innerText = "Uploading...";
+
+    try {
+        const snapshot = await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(snapshot.ref);
+        
+        // Save metadata to Firestore so students can see it
+        await addDoc(collection(db, "files"), {
+            className: className,
+            fileName: file.name,
+            fileUrl: url,
+            timestamp: new Date()
+        });
+        
+        document.getElementById('fileStatus').innerText = "Upload Complete!";
+        loadClassFiles();
+    } catch (err) {
+        console.error(err);
+        alert("Upload failed.");
+    }
+};
+
+window.loadClassFiles = async () => {
+    const className = document.getElementById('classSelector').value;
+    const q = query(collection(db, "files"), where("className", "==", className));
+    const querySnapshot = await getDocs(q);
+    
+    const list = document.getElementById('classFileList');
+    list.innerHTML = "<h4>Materials:</h4>";
+    querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        list.innerHTML += `<div class="file-item"><span>${data.fileName}</span> <a href="${data.fileUrl}" target="_blank">View</a></div>`;
+    });
+};
+
+window.logout = () => { localStorage.clear(); window.location.href="index.html"; };
+</script>
+</body>
+</html>

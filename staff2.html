@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Dashboard - KSRMCE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif;}
+body{display:flex;height:100vh;background:linear-gradient(135deg,#dfe9f3,#ffffff);overflow:hidden;}
+body::before,body::after{content:"";position:absolute;width:450px;height:450px;filter:blur(120px);opacity:.5;z-index:0;}
+body::before{background:#7aa8ff;top:-120px;left:-120px;}
+body::after{background:#7fffd4;bottom:-120px;right:-120px;}
+.sidebar{width:240px;backdrop-filter:blur(50px);background:rgba(255,255,255,0.15);border-right:1px solid rgba(255,255,255,0.25);padding:20px;z-index:2;height:100vh;overflow-y:auto;}
+.menu div{padding:12px;margin:8px 0;border-radius:14px;cursor:pointer;background:rgba(255,255,255,0.15);transition:.3s;}
+.menu div:hover{background:rgba(255,255,255,0.35);transform:translateX(6px);}
+.logout{margin-top:20px;padding:12px;text-align:center;background:#ff4d4d;color:white;border-radius:12px;cursor:pointer;}
+.main{flex:1;padding:25px;overflow-y:auto;height:100vh;z-index:2;}
+.card{backdrop-filter:blur(50px);background:rgba(255,255,255,0.2);border-radius:25px;padding:25px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.3);}
+table{width:100%; border-collapse: collapse; margin-top:15px;}
+th{text-align:left; padding:12px; border-bottom:2px solid rgba(0,0,0,0.1);}
+td{padding:10px; border-bottom:1px solid rgba(0,0,0,0.05);}
+.post{background:white; margin-top:10px; padding:12px; border-radius:10px; border-left:5px solid #7aa8ff;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;}
+.flip{perspective:1000px;height:180px;}
+.flip-inner{position:relative;width:100%;height:100%;transition:.6s;transform-style:preserve-3d;}
+.flip:hover .flip-inner{transform:rotateY(180deg);}
+.flip-front,.flip-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:15px;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(255,255,255,0.4);backdrop-filter:blur(20px);}
+.flip-back{transform:rotateY(180deg);font-size:11px;text-align:center;}
+.hidden{display:none;}
+input{padding:10px; border-radius:8px; border:1px solid #ccc; width:70%;}
+button{padding:10px 20px; border-radius:8px; border:none; background:#7aa8ff; color:white; cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Staff Panel</h2>
+    <div class="menu">
+        <div onclick="show('home')">🏠 Home</div>
+        <div onclick="show('classroom')">🏫 Classroom</div>
+        <div onclick="show('attendance-sec')">📝 Attendance</div>
+        <div onclick="show('mentor')">👨‍🏫 Mentor</div>
+        <div onclick="show('hod')">📋 HOD</div>
+    </div>
+    <div class="logout" onclick="logout()">Logout</div>
+</div>
+
+<div class="main">
+    <div id="home" class="section">
+        <div class="card"><h2>Staff Profile</h2><p>Name: Kannaya</p><p>Role: Asst. Professor</p></div>
+    </div>
+
+    <div id="classroom" class="section hidden">
+        <div class="card">
+            <h2>Post Note</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input id="noteInput" placeholder="Enter message for students...">
+                <button onclick="addNote()">Post</button>
+            </div>
+            <div id="feed"></div>
+        </div>
+    </div>
+
+    <div id="attendance-sec" class="section hidden">
+        <div class="card">
+            <h2>Take Attendance</h2>
+            <table>
+                <thead><tr><th>Roll</th><th>Status</th></tr></thead>
+                <tbody id="attList"></tbody>
+            </table>
+            <button onclick="submitAttendance()" style="margin-top:20px; background:#28a745; width:100%;">Submit</button>
+        </div>
+    </div>
+
+    <div id="mentor" class="section hidden">
+        <div class="grid" id="mentorGrid"></div>
+    </div>
+    
+    <div id="hod" class="section hidden"><div class="card"><h2>HOD Section</h2><p>Official records only.</p></div></div>
+</div>
+
+<script>
+// Verify Login
+if(localStorage.getItem("role") !== "staff") window.location.href="index.html";
+
+// Generate 40 Students
+const students = [];
+for(let i=1; i<=40; i++) {
+    students.push({
+        roll: "259Y1A39" + (i < 10 ? "0" + i : i),
+        name: "Student " + i
+    });
+}
+
+function show(id){
+    document.querySelectorAll('.section').forEach(s=>s.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    if(id === 'attendance-sec') loadTable();
+    if(id === 'mentor') loadMentor();
+}
+
+function loadTable(){
+    const body = document.getElementById("attList");
+    body.innerHTML = students.map(s => `
+        <tr><td>${s.roll}</td><td>
+            <label><input type="radio" name="at_${s.roll}" value="P" checked> P</label>
+            <label><input type="radio" name="at_${s.roll}" value="A"> A</label>
+        </td></tr>
+    `).join('');
+}
+
+function submitAttendance(){
+    let db = JSON.parse(localStorage.getItem("attendanceDB") || "{}");
+    students.forEach(s => {
+        const status = document.querySelector(`input[name="at_${s.roll}"]:checked`).value;
+        if(!db[s.roll]) db[s.roll] = {p: 0, t: 0};
+        db[s.roll].t += 1;
+        if(status === "P") db[s.roll].p += 1;
+    });
+    localStorage.setItem("attendanceDB", JSON.stringify(db));
+    alert("Success!");
+}
+
+function addNote(){
+    let val = document.getElementById("noteInput").value;
+    if(!val) return;
+    let posts = JSON.parse(localStorage.getItem("classroomPosts") || "[]");
+    posts.unshift({content: val, date: new Date().toLocaleString()});
+    localStorage.setItem("classroomPosts", JSON.stringify(posts));
+    document.getElementById("noteInput").value = "";
+    renderFeed();
+}
+
+function renderFeed(){
+    const f = document.getElementById("feed");
+    let posts = JSON.parse(localStorage.getItem("classroomPosts") || "[]");
+    f.innerHTML = posts.map(p => `<div class="post"><small>${p.date}</small><br>${p.content}</div>`).join('');
+}
+
+function loadMentor(){
+    const g = document.getElementById("mentorGrid");
+    g.innerHTML = students.map(s => `<div class="flip"><div class="flip-inner"><div class="flip-front">👨‍🎓</div><div class="flip-back"><b>${s.roll}</b><br>${s.name}</div></div></div>`).join('');
+}
+
+function logout(){ localStorage.clear(); window.location.href="index.html"; }
+renderFeed();
+</script>
+</body>
+</html>
